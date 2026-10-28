@@ -6,29 +6,29 @@ see README for the full citation). None of these models claims to
 reproduce a client's exact internals:
 
 - ``claude-code``: the study reports Claude Code exposes tool *names* in
-a ~1,258-token reminder and requires a ToolSearch call for full
-definitions. Model: a tool is FOUND for an intent iff BM25 ranks it in
-the top 10 for that intent, otherwise MISSED. The name reminder is
-reported as a token estimate but does not by itself count as FOUND,
-because a name alone is not a callable definition.
+  a ~1,258-token reminder and requires a ToolSearch call for full
+  definitions. Model: a tool is FOUND for an intent iff BM25 ranks it in
+  the top 10 for that intent, otherwise MISSED. The name reminder is
+  reported as a token estimate but does not by itself count as FOUND,
+  because a name alone is not a callable definition.
 - ``codex``: the study reports Codex truncates ~56,619 tokens of
-ALL_TOOLS metadata. Model: tools are serialized in catalog order and
-everything past ``codex_cutoff`` tokens is LOST (TRUNCATED-AWAY).
-The default cutoff (60,000) is a *model parameter* chosen at the scale
-of the observed truncation, not a measured Codex limit -- pass
-``--codex-cutoff`` to test other values. The per-output limit
-(10,000 tokens) is checked separately in checks.py against a sample.
+  ALL_TOOLS metadata. Model: tools are serialized in catalog order and
+  everything past ``codex_cutoff`` tokens is LOST (TRUNCATED-AWAY).
+  The default cutoff (60,000) is a *model parameter* chosen at the scale
+  of the observed truncation, not a measured Codex limit -- pass
+  ``--codex-cutoff`` to test other values. The per-output limit
+  (10,000 tokens) is checked separately in checks.py against a sample.
 - ``opencode-1``: the study reports OpenCode 1.x loads all 99 tool
-definitions at 63,245 tokens/request. Model: every tool VISIBLE, with
-the full catalog token cost reported and a warning above
-OPENCOD1_HUGE_TOKENS (a model threshold, not a client limit).
+  definitions at 63,245 tokens/request. Model: every tool VISIBLE, with
+  the full catalog token cost reported and a warning above
+  OPENCOD1_HUGE_TOKENS (a model threshold, not a client limit).
 - ``opencode-2``: the study reports OpenCode 2.0.31 starts with a
-partial catalog of just 16 tools. Model: the first 16 tools are
-VISIBLE; the rest are found only via BM25 top-10 search, as for
-claude-code.
+  partial catalog of just 16 tools. Model: the first 16 tools are
+  VISIBLE; the rest are found only via BM25 top-10 search, as for
+  claude-code.
 - ``load-all``: generic baseline -- every tool VISIBLE, full cost
-reported. Useful as a control: if even the baseline looks bad, the
-catalog itself (not any client) is the problem.
+  reported. Useful as a control: if even the baseline looks bad, the
+  catalog itself (not any client) is the problem.
 
 Verdict vocabulary: FOUND / MISSED / TRUNCATED-AWAY / VISIBLE.
 A tool with no intent exercising it is reported VISIBLE (its name is
