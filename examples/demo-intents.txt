@@ -1,0 +1,8 @@
+send an invoice
+get an invoice
+send an email
+create a calendar event
+look up a user
+search documents
+create a task
+check the weather
