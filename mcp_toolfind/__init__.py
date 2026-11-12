@@ -6,5 +6,5 @@ from the Spirit Room study (see README) -- not a claim about exact client
 internals. Token counts are a heuristic (characters / 4), not tiktoken.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["__version__"]
