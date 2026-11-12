@@ -15,6 +15,8 @@ import shlex
 import subprocess
 import threading
 
+from . import __version__
+
 
 class ProbeError(Exception):
     """Raised for any probe failure. The audit must not proceed on it."""
@@ -58,7 +60,13 @@ def _request(proc, message, timeout):
         reply = json.loads(line)
     except ValueError:
         raise ProbeError("probe failed: server reply is not JSON: %r" % line[:200])
-    if not isinstance(reply, dict) or "result" not in reply:
+    if not isinstance(reply, dict):
+        raise ProbeError("probe failed: server reply is not an object: %r" % line[:200])
+    if "error" in reply:
+        err = reply["error"]
+        detail = err.get("message") if isinstance(err, dict) else str(err)
+        raise ProbeError("probe failed: server returned JSON-RPC error: %s" % detail)
+    if "result" not in reply:
         raise ProbeError("probe failed: reply has no result: %r" % line[:200])
     return reply["result"]
 
@@ -87,7 +95,7 @@ def probe_stdio(command, timeout=10):
             "jsonrpc": "2.0", "id": 1, "method": "initialize",
             "params": {
                 "protocolVersion": "2024-11-05", "capabilities": {},
-                "clientInfo": {"name": "mcp-toolfind", "version": "0.1.0"},
+                "clientInfo": {"name": "mcp-toolfind", "version": __version__},
             },
         }, timeout)
         _send(proc, {"jsonrpc": "2.0", "method": "notifications/initialized"})
