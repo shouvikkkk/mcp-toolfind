@@ -9,6 +9,8 @@ import json
 import sys
 
 from .clients import CLIENTS, DEFAULT_CODEX_CUTOFF
+from .httpprobe import (DEFAULT_PROTOCOL_VERSION, probe_http,
+                        probe_http_sse)
 from .probe import ProbeError, probe_stdio
 from .report import format_json, format_text, load_intents, load_tools, run_audit
 
@@ -30,6 +32,22 @@ def build_parser():
     audit.add_argument("--probe-cmd",
                        help="stdio MCP server command to probe live; "
                             "its tools/list replaces --tools when given")
+    audit.add_argument("--probe-http",
+                       help="Streamable HTTP MCP endpoint URL to probe live "
+                            "(e.g. https://example.com/mcp); its tools/list "
+                            "replaces --tools when given")
+    audit.add_argument("--probe-http-sse",
+                       help="legacy HTTP+SSE MCP endpoint URL to probe live "
+                            "(the GET SSE endpoint); its tools/list replaces "
+                            "--tools when given")
+    audit.add_argument("--probe-header", action="append", default=[],
+                       metavar="NAME: VALUE",
+                       help="extra HTTP header for --probe-http / "
+                            "--probe-http-sse; repeatable, e.g. "
+                            "\"Authorization: Bearer ...\"")
+    audit.add_argument("--protocol-version", default=DEFAULT_PROTOCOL_VERSION,
+                       help="MCP protocol version to declare (default %s)"
+                            % DEFAULT_PROTOCOL_VERSION)
     audit.add_argument("--probe-timeout", type=int, default=10,
                        help="seconds to wait for each probe reply (default 10)")
     audit.add_argument("--codex-cutoff", type=int, default=DEFAULT_CODEX_CUTOFF,
@@ -65,12 +83,41 @@ def main(argv=None):
               file=sys.stderr)
         return 2
     try:
+        sources = [s for s in (args.probe_cmd, args.probe_http,
+                                args.probe_http_sse, args.tools) if s]
+        if len(sources) > 1:
+            print("error: give exactly one of --tools, --probe-cmd, "
+                  "--probe-http, --probe-http-sse", file=sys.stderr)
+            return 2
+        extra_headers = {}
+        for raw in args.probe_header:
+            if ":" not in raw:
+                print("error: --probe-header needs \"NAME: VALUE\": %r" % raw,
+                      file=sys.stderr)
+                return 2
+            name, _, value = raw.partition(":")
+            name, value = name.strip(), value.strip()
+            if not name or not value:
+                print("error: --probe-header needs \"NAME: VALUE\": %r" % raw,
+                      file=sys.stderr)
+                return 2
+            extra_headers[name] = value
         if args.probe_cmd:
             tools = probe_stdio(args.probe_cmd, timeout=args.probe_timeout)
+        elif args.probe_http:
+            tools = probe_http(args.probe_http, timeout=args.probe_timeout,
+                               protocol_version=args.protocol_version,
+                               extra_headers=extra_headers)
+        elif args.probe_http_sse:
+            tools = probe_http_sse(args.probe_http_sse,
+                                   timeout=args.probe_timeout,
+                                   protocol_version=args.protocol_version,
+                                   extra_headers=extra_headers)
         elif args.tools:
             tools = load_tools(args.tools)
         else:
-            print("error: --tools or --probe-cmd is required", file=sys.stderr)
+            print("error: --tools, --probe-cmd, --probe-http or "
+                  "--probe-http-sse is required", file=sys.stderr)
             return 2
     except (ValueError, ProbeError) as exc:
         print("error: %s" % exc, file=sys.stderr)
