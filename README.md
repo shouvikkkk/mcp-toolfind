@@ -90,7 +90,9 @@ python -m mcp_toolfind audit --tools examples/demo-tools.json \
 python -m mcp_toolfind audit --tools <json> --intents <txt> \
   [--clients claude-code,codex,opencode-1,opencode-2,load-all] \
   [--format text|json] \
-  [--probe-cmd "..."] [--probe-timeout 10] \
+  [--probe-cmd "..."] [--probe-http <url>] [--probe-http-sse <url>] \
+  [--probe-header "NAME: VALUE"] [--protocol-version 2025-06-18] \
+  [--probe-timeout 10] \
   [--codex-cutoff 60000] \
   [--sample-output <json>]
 ```
@@ -103,8 +105,23 @@ python -m mcp_toolfind audit --tools <json> --intents <txt> \
 - `--probe-cmd`: instead of a file, spawn a stdio MCP server command
   and run JSON-RPC `initialize` + `tools/list` against it (with a
   timeout). Any probe error fails closed — no audit runs on a catalog
-  that could not be retrieved. Only stdio is supported; see
-  Limitations.
+  that could not be retrieved.
+- `--probe-http`: instead of a file, probe a remote MCP server over
+  Streamable HTTP (spec 2025-03-26 through 2025-11-25): POST
+  `initialize` + `notifications/initialized` + `tools/list` to the
+  endpoint URL (e.g. `https://example.com/mcp`). The server may answer
+  with one JSON object or a short SSE stream; a returned
+  `Mcp-Session-Id` is sent on later requests, and a 404 for a known
+  session re-initializes once. Any probe error fails closed.
+- `--probe-http-sse`: instead of a file, probe a legacy HTTP+SSE MCP
+  server (spec 2024-11-05, deprecated): GET the SSE endpoint, read the
+  first `endpoint` event for the POST URL, then the same JSON-RPC
+  sequence, matching replies on the stream by id.
+- `--probe-header`: extra HTTP header for `--probe-http` /
+  `--probe-http-sse`, repeatable — e.g. `--probe-header "Authorization:
+  Bearer ..."`. No OAuth flow is implemented; bring your own token.
+- `--protocol-version`: MCP protocol version to declare (default
+  `2025-06-18`).
 - `--sample-output`: a JSON file holding a sample tool output (a
   `text`/`output` string, or any JSON document) to check against the
   per-client response limits.
@@ -201,9 +218,22 @@ Exit code: 2 (failures found)
   (all intent tokens must match) is deliberately strict to avoid false
   misses; it can miss genuinely relevant tools phrased with synonyms
   (e.g. "bill" for "invoice").
-- **stdio probe only.** No HTTP/SSE transport yet. The probe speaks
-  one-JSON-message-per-line JSON-RPC and fails closed on timeouts,
-  malformed replies, or missing results.
+- **HTTP probes target the 2025 Streamable HTTP revisions.**
+  `--probe-http` speaks spec 2025-03-26 through 2025-11-25 (initialize
+  handshake, optional `Mcp-Session-Id`, SSE replies). The stateless
+  2026-07-28 revision (no initialize, `Mcp-Method`/`Mcp-Name` routing
+  headers) is NOT targeted: a server speaking only that revision fails
+  the probe, honestly, rather than silently auditing a catalog
+  retrieved under the wrong protocol. `--probe-http-sse` covers the
+  deprecated 2024-11-05 HTTP+SSE transport for servers that still
+  speak it. No OAuth flow: authenticated servers need
+  `--probe-header "Authorization: Bearer ..."`.
+- **SSE replies are read only up to the matching response.** For a
+  Streamable HTTP reply the probe stops reading once the JSON-RPC
+  response with the request's id arrives; notifications interleaved
+  before it are skipped, and a server that holds the stream open
+  afterwards cannot stall the probe. The legacy probe reads the GET
+  stream in a background thread and matches replies by id the same way.
 - **No LLM calls anywhere.** By design: the audit is deterministic,
   offline, and free to run in CI. That is also why it cannot judge
   semantic relevance beyond token matching.
@@ -217,12 +247,17 @@ Exit code: 2 (failures found)
 python -m unittest discover -s tests
 ```
 
-44 tests: BM25 ranking correctness (including the name-boost effect),
+68 tests: BM25 ranking correctness (including the name-boost effect),
 truncation cutoff math, token estimator sanity, every client model on
 fixture catalogs, the stdio probe against a fake JSON-RPC server
-fixture, CLI exit codes (0 / 1 / 2), and edge cases — empty catalog,
-duplicate names, unicode names, malformed JSON failing closed, and a
-missing intents file failing closed.
+fixture, the Streamable HTTP and legacy HTTP+SSE probes against a fake
+in-process HTTP MCP server (JSON replies, SSE replies, session-id
+capture and reuse, 404 session-gone re-initialize, wrong content-type
+and malformed replies failing closed), SSE framing edge cases
+(multi-line data, comments, CRLF, trailing events), CLI exit codes
+(0 / 1 / 2), and edge cases — empty catalog, duplicate names, unicode
+names, malformed JSON failing closed, and a missing intents file
+failing closed.
 
 ## License
 
