@@ -49,7 +49,7 @@ def parse_sse_events(body):
     """Parse an SSE body into a list of ``{"event", "data", "id"}`` dicts.
 
     Follows the SSE framing rules: events are separated by a blank line,
-    ``data:`` lines join with ``\n``, ``:`` lines are comments, unknown
+    ``data:`` lines join with ``\\n``, ``:`` lines are comments, unknown
     fields are ignored, and a missing ``event:`` means the default
     ``message`` event. ``body`` may be ``str`` or ``bytes``.
     """
